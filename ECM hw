@@ -1,0 +1,345 @@
+# Автор -- Базоева Кристина
+
+#install.packages("haven")
+library (haven)
+#install.packages("dplyr")
+library (dplyr)
+#install.packages("stargazer")
+library(stargazer)
+GEF_dataset_final <- read_dta("~/Downloads/GEF_dataset_final.dta")
+data <- read_dta("~/Downloads/GEF_dataset_final.dta")
+data <- data[-data$acept]
+
+data_clear <- data.frame("Treatment"=data$treatment, "Have children"=data$children, "Number of children"=data$num_children, 
+                         "Married"=data$marital_status, "Income level"=data$income,
+                         "Land owner"=data$property, "Student"=data$labor_stat)
+
+data_clear$Married=as.numeric(data$marital_status==2)
+data_clear$Single=as.numeric(data$marital_status==1)
+data_clear$Land.owner=as.numeric(data$property==1)
+data_clear$Student=as.numeric(data$labor_stat==5)
+data_clear$Unemployed=as.numeric(data$labor_stat==6)
+data_clear$"Full or part time worker"= as.numeric(data$labor_stat==1 | data$labor_stat==2)
+data_clear$"Retired"=as.numeric(data$labor_stat==7)
+data_clear$"Source of income – wage"= as.numeric(data$source_inc==1)
+data_clear$"Source of income – social benefits"= as.numeric(data$source_inc==2 |data$source_inc==4)
+data_clear$"Source of income – pension"= as.numeric(data$source_inc==3)
+data_clear$"Source of news – TV"= as.numeric(data$source_media==1)
+data_clear$"Source of news – radio"=as.numeric(data$source_media==2)
+data_clear$"Source of news – internet"=as.numeric(data$source_media==3)
+data_clear$"Religion – Catholic"=as.numeric(data$religion==1)
+data_clear$"Religion – Muslim"=as.numeric(data$religion==4)
+data_clear$"Religion – none"=as.numeric(data$religion==7)
+data_clear$"Voted in 2012 – Hollande"=as.numeric(data$whomvoted_past==1)
+data_clear$"Voted in 2012 – Sarkozy"=as.numeric(data$whomvoted_past==2)
+data_clear$"Voted in 2012 – Melenchon"=as.numeric(data$whomvoted_past==3)
+data_clear$"Voted in 2012 – Le Pen"=as.numeric(data$whomvoted_past==4)
+data_clear$"Voted in 2012 – Other candidate"=as.numeric(data$whomvoted_past==8)
+data_clear$"Did not vote in 2012"=as.numeric(data$whomvoted_past==6 |data$whomvoted_past==9)
+data_clear$"Voted for FN in the past"=data$voted_FN
+data_clear$"Unemployment rate among immigrants, scale 1-10"=data$opinion_unemp
+data_clear$"Correct prior, dummy"=as.numeric(data$opinion_unemp==2)
+data_clear$"Overestimated prior, dummy"=as.numeric(data$opinion_unemp>2)
+data_clear$"Underestimated prior, dummy"=as.numeric(data$opinion_unemp<2)
+
+
+
+
+####----- Тут я ещё не знала о чудо-пакете
+##Разделим дату на тритмент-группы
+#data_c <- data_clear[which(data_clear$Treatment== 0),]
+#data_c <- data_c[-data_c$"Treatment"]
+#data_alt_facts <-  data_clear[which(data_clear$Treatment== 1),]
+#vdata_f_check <- data_clear[which(data_clear$Treatment== 3),]
+#data_facts <-  data_clear[which(data_clear$Treatment== 2),]
+#stargazer(data_c, type="text", summary = NULL,  summary.logical = F, min.max = F, digits = 2)
+
+#merged_means <- data.frame(colMeans(data_alt_facts, na.rm = T),  colMeans(data_f_check, na.rm = T), 
+#          colMeans(data_facts, na.rm = T), colMeans(data_c, na.rm = T) )
+#colnames(merged_means) <- c("Alt-Fact", "Fact-Check", "Facts", "Control")
+#merged_means <- data.frame(t(merged_means))
+#merged_means <-merged_means[-merged_means$Treatment]
+#merged_means <- round(data.frame(t(merged_means)),2)
+
+####----- А тут узнала
+#install.packages("RCT")
+library(RCT)
+balance <- data.frame(balance_table(data_clear, "Treatment"))
+rownames(balance) <- balance[,1]
+balance <- balance[,-1]
+balance <- round(balance, digits=2)
+colnames(balance) <- c("Control", "Alt-Fact", "Facts", "Fact-Check", "Alt Fact vs Control", 
+                       "Facts vs Control", "Fact-Check vs Control")
+balance <- balance %>% select("Alt-Fact",  "Fact-Check", "Facts","Control", "Alt Fact vs Control", "Fact-Check vs Control", 
+                   "Facts vs Control")
+bal <- rbind(balance[4,], balance[8,],balance[7,],balance[14,],balance[5,],balance[6,],balance[21,],
+             balance[23,],balance[3,],balance[13,],balance[17,],balance[16,],balance[15,],
+             balance[18,],balance[20,],balance[19,],balance[c(10:12),],balance[26,],
+             balance[30,],balance[28,],balance[27,],balance[29,],balance[2,],
+             balance[25,],balance[24,],balance[1,],balance[9,],balance[22,])
+
+
+
+data_new <- data_clear[-which(data_clear$Treatment==0),]
+balance_new <- data.frame(balance_table(data_new, "Treatment"))
+bal_new <- rbind(balance_new[4,], balance_new[8,],balance_new[7,],balance_new[14,],balance_new[5,],balance_new[6,],balance_new[21,],
+                 balance_new[23,],balance_new[3,],balance_new[13,],balance_new[17,],balance_new[16,],balance_new[15,],
+                 balance_new[18,],balance_new[20,],balance_new[19,],balance_new[c(10:12),],balance_new[26,],
+                 balance_new[30,],balance_new[28,],balance_new[27,],balance_new[29,],balance_new[2,],
+                 balance_new[25,],balance_new[24,],balance_new[1,],balance_new[9,],balance_new[22,])
+rownames(bal_new) <- bal_new[,1]
+bal_new <- bal_new[,-1]
+bal_new <- round(bal_new, digits=2)
+bal$"Alt-Fact vs Fact-Check"=bal_new$p_value3
+data_balda <- data_clear[-which(data_clear$Treatment==0 | data_clear$Treatment==1),]
+data_balda <- data.frame(balance_table(data_balda, "Treatment"))
+bal_da <- rbind(data_balda[4,], data_balda[8,],data_balda[7,],data_balda[14,],data_balda[5,],data_balda[6,],data_balda[21,],
+                data_balda[23,],data_balda[3,],data_balda[13,],data_balda[17,],data_balda[16,],data_balda[15,],
+                data_balda[18,],data_balda[20,],data_balda[19,],data_balda[c(10:12),],data_balda[26,],
+                data_balda[30,],data_balda[28,],data_balda[27,],data_balda[29,],data_balda[2,],
+                data_balda[25,],data_balda[24,],data_balda[1,],data_balda[9,],data_balda[22,])
+rownames(bal_da) <- bal_da[,1]
+bal_da <- bal_da[,-1]
+bal_da <- round(bal_da, digits=2)
+bal$"Facts vs Fact-Check" <- bal_da$p_value3
+bal$"Alt-Fact vs Facts" <- bal_new$p_value2
+
+#install.packages("xtable")
+library(xtable)
+xtable(bal)
+
+
+
+## Рандомизация
+data_randomized <- data_clear
+data_randomized$Treatment <- NA
+data_randomized$Treatment <- c(rep(c(0:3),length(data_randomized$Treatment)/4))
+
+balance_2 <- data.frame(balance_table(data_randomized, "Treatment"))
+rownames(balance_2) <- balance_2[,1]
+balance_2 <- balance_2[,-1]
+balance_2 <- round(balance_2, digits=2)
+colnames(balance_2) <- c("Control", "Alt-Fact", "Facts", "Fact-Check", "Alt Fact vs Control", 
+                       "Facts vs Control", "Fact-Check vs Control")
+balance_2 <- balance_2 %>% select("Alt-Fact",  "Fact-Check", "Facts","Control", "Alt Fact vs Control", "Fact-Check vs Control", 
+                              "Facts vs Control")
+bal_2 <- rbind(balance_2[4,], balance_2[8,],balance_2[7,],balance_2[14,],balance_2[5,],balance_2[6,],balance_2[21,],
+             balance_2[23,],balance_2[3,],balance_2[13,],balance_2[17,],balance_2[16,],balance_2[15,],
+             balance_2[18,],balance_2[20,],balance_2[19,],balance_2[c(10:12),],balance_2[26,],
+             balance_2[30,],balance_2[28,],balance_2[27,],balance_2[29,],balance_2[2,],
+             balance_2[25,],balance_2[24,],balance_2[1,],balance_2[9,],balance_2[22,])
+
+data_new_2 <- data_randomized[-which(data_randomized$Treatment==0),]
+balance_2_new<- data.frame(balance_table(data_new_2, "Treatment"))
+bal_new_2 <- rbind(balance_2_new[4,], balance_2_new[8,],balance_2_new[7,],balance_2_new[14,],balance_2_new[5,],balance_2_new[6,],balance_2_new[21,],
+                 balance_2_new[23,],balance_2_new[3,],balance_2_new[13,],balance_2_new[17,],balance_2_new[16,],balance_2_new[15,],
+                 balance_2_new[18,],balance_2_new[20,],balance_2_new[19,],balance_2_new[c(10:12),],balance_2_new[26,],
+                 balance_2_new[30,],balance_2_new[28,],balance_2_new[27,],balance_2_new[29,],balance_2_new[2,],
+                 balance_2_new[25,],balance_2_new[24,],balance_2_new[1,],balance_2_new[9,],balance_2_new[22,])
+rownames(bal_new_2) <- bal_new_2[,1]
+bal_new_2 <- bal_new_2[,-1]
+bal_new_2 <- round(bal_new_2, digits=2)
+bal_2$"Alt-Fact vs Fact-Check"=bal_new_2$p_value3
+data_balda_2 <- data_randomized[-which(data_randomized$Treatment==0 | data_randomized$Treatment==1),]
+data_balda_2 <- data.frame(balance_table(data_balda_2, "Treatment"))
+bal_da_2 <- rbind(data_balda[4,], data_balda[8,],data_balda[7,],data_balda[14,],data_balda[5,],data_balda[6,],data_balda[21,],
+                data_balda[23,],data_balda[3,],data_balda[13,],data_balda[17,],data_balda[16,],data_balda[15,],
+                data_balda[18,],data_balda[20,],data_balda[19,],data_balda[c(10:12),],data_balda[26,],
+                data_balda[30,],data_balda[28,],data_balda[27,],data_balda[29,],data_balda[2,],
+                data_balda[25,],data_balda[24,],data_balda[1,],data_balda[9,],data_balda[22,])
+rownames(bal_da_2) <- bal_da_2[,1]
+bal_da_2 <- bal_da_2[,-1]
+bal_da_2 <- round(bal_da_2, digits=2)
+bal_2$"Facts vs Fact-Check" <- bal_da_2$p_value3
+bal_2$"Alt-Fact vs Facts" <- bal_new_2$p_value2
+
+xtable(bal_2)
+
+
+#### Ранзомизация сос мыслом
+#install.packages("digest") 
+library(digest)
+data_smart_rand <- data_clear
+data_smart_rand$responseid <- data$responseid
+data_smart_rand$Treatment <- NA
+data_smart_rand$int_id <- data_smart_rand$responseid %>% digest2int()
+porog <- quantile(data_smart_rand$int_id)
+trash <- cut(data_smart_rand$int_id, breaks = porog,
+                   include.lowest = TRUE, labels = FALSE)
+data_smart_rand$Treatment <- trash-1
+data_smart_rand <- data_smart_rand[,-c(32,33)]
+
+balance_3 <- data.frame(balance_table(data_smart_rand, "Treatment"))
+rownames(balance_3) <- balance_3[,1]
+balance_3 <- balance_3[,-1]
+balance_3 <- round(balance_3, digits=2)
+colnames(balance_3) <- c("Control", "Alt-Fact", "Facts", "Fact-Check", "Alt Fact vs Control", 
+                         "Facts vs Control", "Fact-Check vs Control")
+balance_3 <- balance_3 %>% select("Alt-Fact",  "Fact-Check", "Facts","Control", "Alt Fact vs Control", "Fact-Check vs Control", 
+                                  "Facts vs Control")
+bal_3 <- rbind(balance_3[4,], balance_3[8,],balance_3[7,],balance_3[14,],balance_3[5,],balance_3[6,],balance_3[21,],
+               balance_3[23,],balance_3[3,],balance_3[13,],balance_3[17,],balance_3[16,],balance_3[15,],
+               balance_3[18,],balance_3[20,],balance_3[19,],balance_3[c(10:12),],balance_3[26,],
+               balance_3[30,],balance_3[28,],balance_3[27,],balance_3[29,],balance_3[2,],
+               balance_3[25,],balance_3[24,],balance_3[1,],balance_3[9,],balance_3[22,])
+
+data_new_3 <- data_smart_rand[-which(data_smart_rand$Treatment==0),]
+balance_3_new<- data.frame(balance_table(data_new_3, "Treatment"))
+bal_new_3 <- rbind(balance_3_new[4,], balance_3_new[8,],balance_3_new[7,],balance_3_new[14,],balance_3_new[5,],balance_3_new[6,],balance_3_new[21,],
+                   balance_3_new[23,],balance_3_new[3,],balance_3_new[13,],balance_3_new[17,],balance_3_new[16,],balance_3_new[15,],
+                   balance_3_new[18,],balance_3_new[20,],balance_3_new[19,],balance_3_new[c(10:12),],balance_3_new[26,],
+                   balance_3_new[30,],balance_3_new[28,],balance_3_new[27,],balance_3_new[29,],balance_3_new[2,],
+                   balance_3_new[25,],balance_3_new[24,],balance_3_new[1,],balance_3_new[9,],balance_3_new[22,])
+rownames(bal_new_3) <- bal_new_3[,1]
+bal_new_3 <- bal_new_3[,-1]
+bal_new_3 <- round(bal_new_3, digits=2)
+bal_3$"Alt-Fact vs Fact-Check"=bal_new_3$p_value3
+data_balda_3 <- data_smart_rand[-which(data_smart_rand$Treatment==0 | data_smart_rand$Treatment==1),]
+data_balda_3 <- data.frame(balance_table(data_balda_3, "Treatment"))
+bal_da_3 <- rbind(data_balda[4,], data_balda[8,],data_balda[7,],data_balda[14,],data_balda[5,],data_balda[6,],data_balda[21,],
+                  data_balda[23,],data_balda[3,],data_balda[13,],data_balda[17,],data_balda[16,],data_balda[15,],
+                  data_balda[18,],data_balda[20,],data_balda[19,],data_balda[c(10:12),],data_balda[26,],
+                  data_balda[30,],data_balda[28,],data_balda[27,],data_balda[29,],data_balda[2,],
+                  data_balda[25,],data_balda[24,],data_balda[1,],data_balda[9,],data_balda[22,])
+rownames(bal_da_3) <- bal_da_3[,1]
+bal_da_3 <- bal_da_3[,-1]
+bal_da_3 <- round(bal_da_3, digits=2)
+bal_3$"Facts vs Fact-Check" <- bal_da_3$p_value3
+bal_3$"Alt-Fact vs Facts" <- bal_new_3$p_value2
+
+xtable(bal_3)
+
+### Регрессии
+#install.packages("glm2")
+library(glm2)
+#install.packages("sandwich")
+library(sandwich)
+data_models <- data
+data_models$Alt_Facts <- as.numeric(data$treatment==1)
+data_models$"Fact-Check" <- as.numeric(data$treatment==3)
+data_models$Facts <- as.numeric(data$treatment==2)
+data_models$"Voted in 2012 – Hollande"=as.numeric(data$whomvoted_past==1)
+data_models$"Voted in 2012 – Sarkozy"=as.numeric(data$whomvoted_past==2)
+data_models$"Voted in 2012 – Melenchon"=as.numeric(data$whomvoted_past==3)
+data_models$"Voted in 2012 – Le Pen"=as.numeric(data$whomvoted_past==4)
+data_models$"Voted in 2012 – Other candidate"=as.numeric(data$whomvoted_past==8)
+data_models$"Did not vote in 2012"=as.numeric(data$whomvoted_past==6 |data$whomvoted_past==9)
+
+data_models$"dmeaned_Voted in 2012 – Hollande" <- data_models$"Voted in 2012 – Hollande"- mean(data_models$"Voted in 2012 – Hollande")
+data_models$"dmeaned_Voted in 2012 – Sarkozy" <- data_models$"Voted in 2012 – Sarkozy"- mean(data_models$"Voted in 2012 – Sarkozy")
+data_models$"dmeaned_Voted in 2012 – Melenchon" <- data_models$"Voted in 2012 – Melenchon"- mean(data_models$"Voted in 2012 – Melenchon")
+data_models$"dmeaned_Voted in 2012 – Le Pen" <- data_models$"Voted in 2012 – Le Pen"- mean(data_models$"Voted in 2012 – Le Pen")
+data_models$"dmeaned_Voted in 2012 – Other candidate" <- data_models$"Voted in 2012 – Other candidate"- mean(data_models$"Voted in 2012 – Other candidate")
+data_models$"dmeaned_Did not vote in 2012" <- data_models$"Did not vote in 2012"- mean(data_models$"Did not vote in 2012")
+
+
+
+data_models$dwage <- as.numeric(data$source_inc==1)
+data_models$dmarried <- as.numeric(data$marital_status==2)
+data_models$willvote_MLP <- as.numeric(data$willvote_FN>3)
+data_models$reason_migration_economic<- as.numeric(data$reason_mig==1)
+data_models$agree <- as.numeric(data$disagree_FN<3)
+
+cse = function(reg) 
+{ 
+  rob = sqrt(diag(vcovHC(reg, type = "HC1"))) 
+  return(rob) 
+}
+
+
+mod1 <- lm(willvote_MLP ~ Alt_Facts+data_models$"Fact-Check"+Facts+as.factor(sexe)+
+             as.factor(quot_age)+as.factor(quota_educ)+as.factor(region_residence), data=data_models)
+
+mod2 <-lm(willvote_MLP ~ Alt_Facts+data_models$"Fact-Check"+Facts+as.factor(income)+
+            as.factor(sexe)+ age+ as.factor(education)+  as.factor(quot_age)+
+            as.factor(region_residence)+ as.factor(religion)+ dwage+dmarried , data=data_models)
+
+mod3 <- lm(willvote_MLP ~  Alt_Facts+data_models$"Fact-Check"+Facts+as.factor(income)+
+             as.factor(sexe)+ age+ as.factor(education)+  as.factor(quot_age)+
+             as.factor(region_residence)+ as.factor(religion)+ dwage+dmarried +data_models$"Voted in 2012 – Hollande"+
+          + data_models$"Voted in 2012 – Sarkozy" + data_models$"Voted in 2012 – Melenchon"
+          +data_models$"Voted in 2012 – Le Pen"+data_models$"Voted in 2012 – Other candidate"
+          +data_models$"Did not vote in 2012", data=data_models )
+
+
+mod4 <- lm(willvote_MLP ~  Alt_Facts+data_models$"Fact-Check"+Facts+as.factor(income)+
+             as.factor(sexe)+ age+ as.factor(education)+  as.factor(quot_age)+
+             as.factor(region_residence)+ as.factor(religion)+ dwage+dmarried +data_models$"Voted in 2012 – Hollande"+
+             + data_models$"Voted in 2012 – Sarkozy" + data_models$"Voted in 2012 – Melenchon"
+           +data_models$"Voted in 2012 – Le Pen"+data_models$"Voted in 2012 – Other candidate"
+           +data_models$"Did not vote in 2012" + as.factor(treatment)*data_models$"dmeaned_Voted in 2012 – Hollande"+
+             as.factor(treatment)*data_models$"dmeaned_Voted in 2012 – Sarkozy" + 
+             as.factor(treatment)*data_models$"dmeaned_Voted in 2012 – Melenchon" +
+             as.factor(treatment)*data_models$"dmeaned_Voted in 2012 – Le Pen" +
+             as.factor(treatment)*data_models$"dmeaned_Voted in 2012 – Other candidate" +
+             as.factor(treatment)*data_models$"dmeaned_Did not vote in 2012" -as.factor(treatment) , data=data_models )
+
+
+mod5 <- lm(reason_migration_economic ~ Alt_Facts+data_models$"Fact-Check"+Facts+as.factor(sexe)+
+             as.factor(quot_age)+as.factor(quota_educ)+as.factor(region_residence), data=data_models)
+mod6 <- lm(reason_migration_economic ~ Alt_Facts+data_models$"Fact-Check"+Facts+as.factor(income)+
+             as.factor(sexe)+ age+ as.factor(education)+  as.factor(quot_age)+
+             as.factor(region_residence)+ as.factor(religion)+ dwage+dmarried , data=data_models)
+mod7 <- lm(reason_migration_economic ~  Alt_Facts+data_models$"Fact-Check"+Facts+as.factor(income)+
+       as.factor(sexe)+ age+ as.factor(education)+  as.factor(quot_age)+
+       as.factor(region_residence)+ as.factor(religion)+ dwage+dmarried +data_models$"Voted in 2012 – Hollande"+
+       + data_models$"Voted in 2012 – Sarkozy" + data_models$"Voted in 2012 – Melenchon"
+     +data_models$"Voted in 2012 – Le Pen"+data_models$"Voted in 2012 – Other candidate"
+     +data_models$"Did not vote in 2012", data=data_models )
+mod8 <- lm(reason_migration_economic ~  Alt_Facts+data_models$"Fact-Check"+Facts+as.factor(income)+
+             as.factor(sexe)+ age+ as.factor(education)+  as.factor(quot_age)+
+             as.factor(region_residence)+ as.factor(religion)+ dwage+dmarried +data_models$"Voted in 2012 – Hollande"+
+             + data_models$"Voted in 2012 – Sarkozy" + data_models$"Voted in 2012 – Melenchon"
+           +data_models$"Voted in 2012 – Le Pen"+data_models$"Voted in 2012 – Other candidate"
+           +data_models$"Did not vote in 2012" + as.factor(treatment)*data_models$"dmeaned_Voted in 2012 – Hollande"+
+             as.factor(treatment)*data_models$"dmeaned_Voted in 2012 – Sarkozy" + 
+             as.factor(treatment)*data_models$"dmeaned_Voted in 2012 – Melenchon" +
+             as.factor(treatment)*data_models$"dmeaned_Voted in 2012 – Le Pen" +
+             as.factor(treatment)*data_models$"dmeaned_Voted in 2012 – Other candidate" +
+             as.factor(treatment)*data_models$"dmeaned_Did not vote in 2012" -as.factor(treatment) , data=data_models )
+
+mod9 <- lm(agree ~ Alt_Facts+data_models$"Fact-Check"+Facts+as.factor(sexe)+
+             as.factor(quot_age)+as.factor(quota_educ)+as.factor(region_residence), data=data_models)
+
+mod10 <- lm(agree ~ Alt_Facts+data_models$"Fact-Check"+Facts+as.factor(income)+
+             as.factor(sexe)+ age+ as.factor(education)+  as.factor(quot_age)+
+             as.factor(region_residence)+ as.factor(religion)+ dwage+dmarried , data=data_models)
+
+mod11 <- lm(agree ~  Alt_Facts+data_models$"Fact-Check"+Facts+as.factor(income)+
+             as.factor(sexe)+ age+ as.factor(education)+  as.factor(quot_age)+
+             as.factor(region_residence)+ as.factor(religion)+ dwage+dmarried +data_models$"Voted in 2012 – Hollande"+
+             + data_models$"Voted in 2012 – Sarkozy" + data_models$"Voted in 2012 – Melenchon"
+           +data_models$"Voted in 2012 – Le Pen"+data_models$"Voted in 2012 – Other candidate"
+           +data_models$"Did not vote in 2012", data=data_models )
+mod12 <- lm(agree ~  Alt_Facts+data_models$"Fact-Check"+Facts+as.factor(income)+
+             as.factor(sexe)+ age+ as.factor(education)+  as.factor(quot_age)+
+             as.factor(region_residence)+ as.factor(religion)+ dwage+dmarried +data_models$"Voted in 2012 – Hollande"+
+             + data_models$"Voted in 2012 – Sarkozy" + data_models$"Voted in 2012 – Melenchon"
+           +data_models$"Voted in 2012 – Le Pen"+data_models$"Voted in 2012 – Other candidate"
+           +data_models$"Did not vote in 2012" + as.factor(treatment)*data_models$"dmeaned_Voted in 2012 – Hollande"+
+             as.factor(treatment)*data_models$"dmeaned_Voted in 2012 – Sarkozy" + 
+             as.factor(treatment)*data_models$"dmeaned_Voted in 2012 – Melenchon" +
+             as.factor(treatment)*data_models$"dmeaned_Voted in 2012 – Le Pen" +
+             as.factor(treatment)*data_models$"dmeaned_Voted in 2012 – Other candidate" +
+             as.factor(treatment)*data_models$"dmeaned_Did not vote in 2012" -as.factor(treatment) , data=data_models )
+
+stargazer(mod1, mod2, mod3, mod4, mod5,mod6,mod7,mod8,mod9,mod10,mod11,mod12, 
+          se=list(cse(mod1),cse(mod2),cse(mod3),cse(mod4),cse(mod5),cse(mod6),cse(mod7),
+                  cse(mod8), cse(mod9),cse(mod10),cse(mod11),cse(mod12) ), type="latex", 
+          colnames=F, column.separate=c(4,4,4), column.labels=c("Will vote MLP", "Reason for migration: Economic", "Agree with MLP's immigration policy"), 
+          digits=3)
+###### Множественный тест
+pval <- bal[,c(5:10)]
+length(pval[,1])
+for ( i in c(1:30)) {
+  if(sum(as.numeric(p.adjust(pval[i,],method="bonferroni")<0.01))!=0) bal$"Significant differences"[i] <- "Significant 1%"
+  else if(sum(as.numeric(p.adjust(pval[i,],method="bonferroni")<0.05))!=0) bal$"Significant differences"[i] <- "Significant 5%"
+    else if(sum(as.numeric(p.adjust(pval[i,],method="bonferroni")<0.1))!=0) bal$"Significant differences"[i] <- "Significant 10%"
+    else bal$"Significant differences"[i] <- "NO"
+}
+sign <- data.frame(`Alt-Fact`=bal$`Alt-Fact`,`Fact-Check`= bal$`Fact-Check`,Facts=bal$Facts, Control=bal$Control, 'Significant differences'=bal$`Significant differences`)
+rownames(sign) <- rownames(bal)
+xtable(sign)
+
+########## FIN ############
+
