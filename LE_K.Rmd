@@ -1,0 +1,304 @@
+---
+title: "Project1"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+
+library("dplyr")
+library("stargazer") 
+library("ggplot2")
+#library("openintro")
+#library("gdata")
+library("tidyverse")
+library("sampleSelection")
+library("haven")
+library("readxl")
+library("openxlsx")
+#library("psych")
+library(car)
+library(SciViews)
+library(sandwich)
+
+install.packages("/Users/krib/Desktop/EF/3 курс/ЭКМ/ivpack", repos = NULL, type="source")
+library("ivpack")
+```
+
+# _v23(зарплата), x_age (возраст), _v145 (образование, 27 стр.), x_educ (тоже образование, хз), x_diplom (законч. обр., хз)
+# стаж -- _v176 (года), _v177 (мес) (в опроснике xj161.3), psu (регион -- хз, как интерпретировать),
+# xj322 (зарег. брак, 33 стр.), xm3 (здоровье, 49 стр.), x_marst(тоже про married, хз)
+# x_occup08 (хз), xj2cod08 (хз), xj7 (работал в посл. 30 дней, стр. 6), xh5 (пол),
+# _v14 (отраб. часов за неделю, xj6.2, стр. 6), _v162 (xj72.173, кол-во детей младше 18, стр. 34)
+
+```{r}
+library(haven)
+data_0 <- read_dta("~/Downloads/Round28WF.dta")
+data <- data_0[,c("_v10", "xj77", "x_occup08", "x_age", "x_educ", "x_diplom", "psu", "x_marst", "xh5", "xj90", "_v23", "_v176", '_v177', "xj2cod08", "xj10", "_v14","_v15", "xj7", "_v162", "xm3", "_v145", "_v201", "_v202", "_v203", "_v204", "_v205", "_v206", "_v207", "_v208", "_v209", "_v210", "_v211", "_v212", "_v213", "_v215", "_v216", "_v217", "_v218", "_v219",  "_v220", "_v214","_v161", "_v160" )]
+data <- as.data.frame(data)
+
+```
+
+# почистили з/п ( избавились от слишком маленьких и больших значений)
+```{r}
+#unique(Round28WF$"_v160")
+data$"_v23" <- as.numeric(data$"_v23")
+data$"_v23" <- ifelse(as.numeric(data$"_v23")>200000 | as.numeric(data$"_v23")<700, NA, as.numeric(data$"_v23")) # выборсы в виде богачей и рабов
+data$wage <- data$"_v23"
+data$"_v14" <- ifelse(as.numeric(data$"_v14")>160 , NA, as.numeric(data$"_v14")) # люди не могут работать больше 160ч/нед
+data$"_v15" <- ifelse(as.numeric(data$"_v15")>31 , NA, as.numeric(data$"_v15"))# люди не могут работать больше 31 д/месяц
+data$hours_week<- data$"_v14"# сколько работаем в неделю 
+data$days_month<-data$"_v15" #сколько дней в месяц работем
+data$wage <- round(data$wage/(data$hours_week*data$days_month/7), 2) #добавили почасовую ставку заработной платы
+#hist(data$wage)
+```
+
+# меняем пол (1-женщина, 0 -мужчина)
+```{r}
+data$xh5 <- data$xh5-1
+data$female <- data$xh5 
+```
+
+# убираем экономически не активное население (возраст)
+```{r}
+data$x_age <- as.numeric(data$x_age)
+data$x_age <- ifelse(as.numeric(data$x_age)>65 | as.numeric(data$x_age)<14, NA, as.numeric(data$x_age)) # возьмём с 14 до 65 лет 
+data$age <- data$x_age
+```
+# образование
+```{r}
+data$x_educ <- as.numeric(data$x_educ)
+data$x_educ <- ifelse(as.numeric(data$x_educ)>23, NA, data$x_educ) # своя шкакла образования
+data$educ <- data$x_educ
+
+#data$x_educ <- ifelse(data$x_educ==23, 20, data$x_educ)
+#data$x_educ <- ifelse(data$x_educ==22, 19, data$x_educ)
+#data$x_educ <- ifelse(data$x_educ==21, 18, data$x_educ)
+#data$x_educ <- ifelse(data$x_educ==20, 15, data$x_educ)
+#data$x_educ <- ifelse(data$x_educ==19 | data$x_educ==18, 13, data$x_educ)
+#data$x_educ <- ifelse(data$x_educ==17, 12, data$x_educ)
+#data$x_educ <- ifelse(data$x_educ==16, 13, data$x_educ)
+#data$x_educ <- ifelse(data$x_educ==15, 12, data$x_educ)
+#data$x_educ <- ifelse(data$x_educ==14, 11, data$x_educ)
+#data$x_educ <- ifelse(data$x_educ==13, 11, data$x_educ)
+#data$x_educ <- ifelse(data$x_educ==12, 10, data$x_educ)
+#data$x_educ <- ifelse(data$x_educ==11, 11, data$x_educ)
+#data$x_educ <- ifelse(data$x_educ==10, 10, data$x_educ)
+```
+
+# стаж в годах 
+```{r}
+data$"_v176" <- ifelse( as.numeric(data$"_v176")>10^8-4, NA, data$"_v176") # удаляем всех у кто не шарит про свой стаж 
+data$"_v176" <- ifelse(as.numeric(data$"_v176")==10^8-4, 0, data$"_v176") # те, у кого не было стажа - о 
+data$"_v177" <- ifelse( as.numeric(data$"_v177")>10^8-4, NA, data$"_v177") # те кто не шарит сколько месяцев тоже 0  
+data$"_v177" <- ifelse(as.numeric(data$"_v176")==10^8-4, 0, data$"_v177") # если не было стажа, то 0
+data$exp1 <- data$"_v176"+as.numeric(data$"_v177")/12
+data$exp <- ifelse((data$age-data$exp1)<14, NA, data$exp1)
+
+```
+
+# наличие высшего образования 
+
+```{r}
+data$"_v145" <- ifelse(as.numeric(data$"_v145")>20, NA, as.numeric(data$"_v145") ) #  если затрудняемся ответить - нафиг
+data$educ_high <- ifelse(as.numeric(data$"_v145")>7 &  as.numeric(data$"_v145")<18 &as.numeric(data$"_v145")!=15 , 1, 0) # высшая степень кроме среднепроф
+
+```
+# наличие профессионального образования
+```{r}
+data$educ_med <- ifelse(as.numeric(data$"_v145")>2 &  as.numeric(data$"_v145")<7, 1, 0) # среднепроф
+```
+
+# проживание в москве
+```{r}
+data$msc <- ifelse(as.numeric(data$psu)==2 , 1, 0)
+```
+
+# здоровье (от очень хорошего к очень плохому)
+```{r}
+#data$health <- ifelse(as.numeric(data$xm3)>5, NA, as.numeric(data$xm3))
+#data$health <-  as.numeric(data$health)
+# вот тут просто убираем тех, кто не захотел отвечать 
+data$"_v201" <-  ifelse(as.numeric(data$"_v201")>99999997, NA,as.numeric(data$"_v201") )
+data$"_v202" <-  ifelse(as.numeric(data$"_v202")>99999997, NA,as.numeric(data$"_v202") )
+data$"_v203" <-  ifelse(as.numeric(data$"_v203")>99999997, NA,as.numeric(data$"_v203") )
+data$"_v204" <-  ifelse(as.numeric(data$"_v204")>99999997, NA,as.numeric(data$"_v204") )
+data$"_v205" <-  ifelse(as.numeric(data$"_v205")>99999997, NA,as.numeric(data$"_v205") )
+data$"_v206" <-  ifelse(as.numeric(data$"_v206")>99999997, NA,as.numeric(data$"_v206") )
+data$"_v207" <-  ifelse(as.numeric(data$"_v207")>99999997, NA,as.numeric(data$"_v207") )
+data$"_v208" <-  ifelse(as.numeric(data$"_v208")>99999997, NA,as.numeric(data$"_v208") )
+data$"_v209" <-  ifelse(as.numeric(data$"_v209")>99999997, NA,as.numeric(data$"_v209") )
+data$"_v210" <-  ifelse(as.numeric(data$"_v210")>99999997, NA,as.numeric(data$"_v210") )
+data$"_v211" <-  ifelse(as.numeric(data$"_v211")>99999997, NA,as.numeric(data$"_v211"))
+data$"_v212" <-  ifelse(as.numeric(data$"_v212")>99999997, NA,as.numeric(data$"_v212"))
+data$"_v213" <-  ifelse(as.numeric(data$"_v213")>99999997, NA,as.numeric(data$"_v213") )
+data$"_v214" <-  ifelse(as.numeric(data$"_v214")>99999997, NA,as.numeric(data$"_v214") )
+data$"_v215" <-  ifelse(as.numeric(data$"_v215")>99999997, NA,as.numeric(data$"_v215"))
+data$"_v216" <-  ifelse(as.numeric(data$"_v216")>99999997, NA,as.numeric(data$"_v216"))
+data$"_v217" <-  ifelse(as.numeric(data$"_v217")>99999997, NA,as.numeric(data$"_v217") )
+data$"_v218" <-  ifelse(as.numeric(data$"_v218")>99999997, NA,as.numeric(data$"_v218") )
+data$"_v219" <-  ifelse(as.numeric(data$"_v219")>99999997, NA,as.numeric(data$"_v219") )
+
+# если нет ни одного хрон заболевания, то здоровы
+data$health <- ifelse(data$"_v201"==2 & data$"_v202"==2 & data$"_v203"==2 &data$"_v204"==2 & data$"_v205"==2 & data$"_v206"==2 &  data$"_v207"==2 &  data$"_v208"==2 & data$"_v209"==2 &  data$"_v210"==2 &  data$"_v211"==2 &  data$"_v212"==2 &  data$"_v213"==2 &  data$"_v214"==2 & data$"_v215"==2 &  data$"_v216"==2 &  data$"_v218"==2 &  data$"_v219"==2, 1, 0)
+
+# если не знаем инвалид или нет, убираем
+data$"_v220" <-  ifelse(as.numeric(data$"_v220")>99999997, NA,as.numeric(data$"_v219") )
+data$health <- ifelse(data$health==1 & data$"_v220"==2,1,0) # если мы НЕ инвалид и нет хрон заболеваний, то здоровы 
+
+data$health <- ifelse(data$female==1 & data$"_v217"==2, 1, data$health) # если по всем критериям здоровы, то верим, что все здоровы
+```
+
+# по сфере деятельности
+```{r}
+data$x_occup08 <- ifelse(data$x_occup08>10, NA, data$x_occup08)
+data$military <- ifelse(as.numeric(data$x_occup08)==0,1, 0) # военнослужащие
+data$boss <- ifelse(as.numeric(data$x_occup08)==1,1, 0) #законодатели; крупные чиновники; руководители высш. и сред. звена
+data$high_qual <- ifelse(as.numeric(data$x_occup08)==2,1, 0)  #специалисты высшего уровня квалификации
+data$mid_qual <- ifelse(as.numeric(data$x_occup08)==3,1, 0)  #специалисты среднего уровня квалификации
+data$office <- ifelse(as.numeric(data$x_occup08)==4,1, 0)  
+data$service <- ifelse(as.numeric(data$x_occup08)==5,1, 0)
+data$agro <- ifelse(as.numeric(data$x_occup08)==6,1, 0)  
+data$manual <- ifelse(as.numeric(data$x_occup08)==7,1, 0)  
+data$machine <- ifelse(as.numeric(data$x_occup08)==8,1, 0)  
+
+```
+
+# количество детей до 18 лет 
+```{r}
+data$kids <- ifelse(as.numeric(data$"_v162")>10,NA, as.numeric(data$"_v162"))  
+data$kids <- ifelse(as.numeric(data$"_v160")==2,0, data$kids) # если нет детей, то 0 детей
+```
+
+# семейный статус 
+```{r}
+data$x_marst <- ifelse(as.numeric(data$x_marst)>10, NA, as.numeric(data$x_marst)) 
+#data$married <- ifelse(as.numeric(data$x_marst)== 2 | as.numeric(data$x_marst)== 3 ,1,0)  # по крайней мере в гражданском браке
+
+data$married <- ifelse(as.numeric(data$x_marst)== 1 | as.numeric(data$x_marst)== 4 | as.numeric(data$x_marst)==5,0, 1) # второй вариант определения брака если всё кроме оф брака развода и вдовства
+```
+
+# Наличие официального трудоутсройства
+```{r}
+data$xj77 <- ifelse(as.numeric(data$xj77)>3, NA, as.numeric(data$xj77)) 
+data$work <- ifelse(as.numeric(data$xj77)==1,1,0) # РЕСПОНДЕНТ СЕЙЧАС РАБОТАЕТ, НАХ-СЯ В ОПЛАЧИВ. ИЛИ НЕОПЛАЧ.ОТПУСКЕ, В Т.Ч. ДЕКРЕТНОМ ИЛИ ПО УХОДУ ЗА РЕБЕНКОМ ДО 3 ЛЕТ
+```
+
+# создаём новую дату с только необходимыми переменными
+```{r}
+clean0 <- data[, c("wage", "female", "age", "educ","exp","educ_high" ,"educ_med", "msc", "health", "kids", "married", "work", "military", "boss",  "high_qual", "mid_qual", "office", 'service',"agro","manual", "machine" )]
+clean <- clean0[-which(is.na(data$work)), ] #убираем пропуски в работе 
+clean <- clean0[-which(is.na(data$kids)), ] # убираем пропуски в наличии детей
+clean <- clean[-which(clean$work==1 & is.na(clean$wage)), ] # если работаем, но не знаем про зп
+clean <- clean[-which( is.na(clean$age)), ] # если не знаем возраст
+clean <- clean[-which(is.na(clean$exp)), ]  # если не знаем про опыт
+clean <- clean[-which(is.na(clean$health)), ] # если не знаем про здоровье 
+names(clean) 
+```
+
+## описательные статистики
+```{r}
+data_female <- subset(clean, female == 1) # таблица для женщин
+data_male <- subset(clean, female == 0) # таблица для мужчин
+
+stargazer(clean, type = "text", digits = 2, median = TRUE) # описательные статистики
+#stargazer(data_female, type = "text", digits = 2, median = TRUE, out = "var_stat_female.html")
+#stargazer(data_male, type = "text", digits = 2, median = TRUE, out = "var_stat_male.html")
+#stargazer(data_female, data_male, type = "text", digits = 2, median = TRUE, out = "var_stat.html")
+
+```
+## Ререссии
+```{r}
+rdata <- clean
+rdata$exp2 <- clean$exp * clean$exp
+rdata$female_married <- clean$female*clean$married
+rdata$female_kids <- clean$kids*clean$female
+rdata$male_health <- ifelse(rdata$female==1, 0, 1)*rdata$health
+```
+
+
+# пробит модель и мнк
+```{r}
+#probit<- glm(work ~ age + exp  + educ_high + educ_med + female + msc + married + female_married + kids + female_kids + health + male_health, 
+#             data=rdata, x = TRUE, family = binomial(link = "probit"))
+#stargazer(probit, type = "text", digits = 2, median = TRUE, out = "probit1.html")
+```
+
+# Хекман для всех
+```{r}
+heck_all <- heckit( work ~ age + exp +I( exp^2 ) + educ_high + educ_med + female + msc + married + female_married + kids + female_kids +health + male_health, log( wage ) ~ educ + exp + I( exp^2 ) + age  + educ_high + educ_med + kids +female + msc +  military+ boss+ high_qual+ mid_qual+office+service+agro+manual+machine+ married + female_married +health, rdata, 
+                 method = "2step" ) 
+
+ols_all <- lm(log( wage ) ~ educ + exp + I( exp^2 ) + age  + educ_high + educ_med + +kids+female + msc +  military+ boss+ high_qual+ mid_qual+office+service+agro+manual+machine+ married + female_married +health, rdata)
+
+stargazer(heck_all, ols_all, title=" ALL",type = "text", digits = 2, median = TRUE, out = "heck.html") 
+```
+# Хекман для женщин
+```{r}
+heck_fem <- heckit( work ~ age + exp +I( exp^2 ) + educ_high + educ_med  + msc + married + kids  + health , log( wage ) ~ educ + exp + I( exp^2 ) + age  + educ_high + educ_med  + msc +  military+ boss+ high_qual+ mid_qual+office+kids+service+agro+manual+machine+ married + health, data_female, 
+                 method = "2step" ) 
+stargazer(heck_fem,type = "text", digits = 2, median = TRUE, out = "heck'_fem.html") 
+
+#probit_female <- glm(work ~ age + +I( exp^2 )+exp + educ_high + educ_med + msc + married + kids + health,       data=rdata_female, x = TRUE, family = binomial(link = "probit"))
+#summary(probit_female)
+
+ols_female <- lm(log( wage ) ~ educ + exp + I( exp^2 ) + age  + educ_high + educ_med +kids + msc +  military+ boss+ high_qual+ mid_qual+office+service+agro+manual+machine+ married + health, data_female)
+
+stargazer(heck_fem,ols_female, type = "text",names=c("heck", "ols"),  digits = 2, median = TRUE, out = "heck'_fem.html") 
+```
+# Хекман для мужчин
+```{r}
+heck_male <- heckit( work ~ age + exp +I( exp^2 ) + educ_high + educ_med  + msc + married + kids  + health , log( wage ) ~ educ + exp + I( exp^2 ) + age  + educ_high + educ_med  + msc +  military+ boss+ high_qual+ mid_qual+office+kids+service+agro+manual+machine+ married + health, data_male, 
+                 method = "2step" )
+ols_male <- heckit( work ~ age + exp +I( exp^2 ) + educ_high + educ_med  + msc + married + kids  + health , log( wage ) ~ educ + exp + I( exp^2 ) + age  + educ_high + educ_med  + msc +  military+ boss+ high_qual+ mid_qual+office+kids+service+agro+manual+machine+ married + health, data_male, 
+                 method = "2step" )
+
+stargazer(heck_male,ols_male, type = "text", digits = 2, median = TRUE, out = "heck'_male.html") 
+```
+
+```{r}
+stargazer(heck_all, ols_all, heck_fem,  ols_female,  heck_male,  ols_male,
+          type="text", 
+          title="Сопоставление 6 моделей", 
+          column.labels = c('all', 'female', 'male'), 
+          column.separate = c(2, 2, 2),
+          df=FALSE, digits=3, out="models.html")
+```
+
+
+## декомпозиция
+```{r}
+library(oaxaca)
+decomp <- oaxaca(log(wage) ~ exp + I( exp^2 ) + age  + educ_high + educ_med + kids+ msc +  military+ boss+ high_qual+ mid_qual+office+service+agro+manual+machine+ married  +health| female, data = rdata)
+
+var1 <- list(0)
+var1 <- decomp$twofold$variables[[1]]
+var1 <- as.data.frame(var1)
+var1 <- var1[,-c(6:9)]
+var1 <- var1[,-1]
+var1 <- var1[,-c(2,4)]
+var1 <- as.data.frame(var1)
+var1["overall",] <- c(sum(var1$`coef(explained)`), sum(var1$`coef(unexplained)`))
+var1["married", 2]/var1["overall", 2]
+var1["overall", 1]/0.3131948
+
+print(decomp)
+decomp$x
+decomp$twofold$variables[[1]]
+decomp$threefold$overall
+plot.oaxaca(decomp, decomposition = "twofold", group.weight = 0, ci = TRUE, ci.level = 0.95, unexplained.split = F)
+plot.oaxaca(decomp, type = "overall", decomposition = "twofold", group.weight = 0, ci = TRUE, ci.level = 0.95)
+
+```
+```{r}
+library(AER)
+library(ggplot2)
+library(gridExtra)
+
+ ggplot(data = clean, aes(x = wage, fill = as.factor(female)), xmax=2000) + geom_density(alpha = 0.5) + theme_bw() + ggtitle("Плотность распределения зарплат по гендерному признаку") + theme(legend.position = "bottom")+scale_fill_manual(values = c("#b7dafa", "#a30078"), labels=c("male", "female"))+labs(fill="gender")+scale_x_continuous(limits=c(0,1000))
+
+
+```
+
